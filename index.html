@@ -31,8 +31,8 @@ header img{height:46px;display:block}
 .intro{color:var(--ink2);max-width:70ch;margin-bottom:18px}
 .grid{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:28px;align-items:start}
 @media (max-width:980px){.grid{grid-template-columns:minmax(0,1fr)}}
-.mob{display:none;gap:6px;margin-bottom:14px}
-@media (max-width:980px){.mob{display:flex}.grid[data-m="panel"] .phonecol{display:none}.grid[data-m="app"] .panelcol{display:none}}
+.fab{display:none}
+@media (max-width:980px){.fab{display:block;position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:50;border:0;background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:12px 18px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.25)}}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
 .stack{display:flex;flex-direction:column;gap:16px;min-width:0}
 .sec{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink3);font-weight:600}
@@ -100,7 +100,7 @@ textarea{resize:vertical;min-height:70px}
 .pit .pi{width:38px;height:38px;border:1px dashed var(--p-ink3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--p-ink2);flex:none}
 .pit .pt{font-weight:500;font-size:14px}.pit .ps{font-size:12.5px;color:var(--p-ink2)}
 .pit .tm{margin-left:auto;font-size:12.5px;color:var(--p-ink2);font-variant-numeric:tabular-nums}
-.pbtn{width:100%;border:0;background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:13px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:500}
+.pbtn{width:100%;border:0;background:var(--accent);color:#fff;border-radius:99px;padding:13px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:500}
 .bub{max-width:82%;padding:9px 13px;border-radius:16px;font-size:13.5px;margin-bottom:8px}
 .bub.a{background:var(--p-card);border:1px solid var(--p-line);border-bottom-left-radius:4px}
 .bub.p{background:#6B705D;color:#fff;margin-left:auto;border-bottom-right-radius:4px}
@@ -124,9 +124,9 @@ textarea{resize:vertical;min-height:70px}
   <span class="badge">Demo interactiva · datos de ejemplo</span>
   <div class="tabs" role="group" aria-label="Vista"><button id="vAgent" aria-pressed="true">Asesora</button><button id="vOwner" aria-pressed="false">Dueña</button></div><button class="themebtn" id="themeBtn" aria-label="Cambiar tema">Tema oscuro</button>
 </header>
-<p class="intro">Esta demo muestra cómo funciona la app. A la izquierda trabaja la asesora; a la derecha está el teléfono de la pasajera. Añade un segmento, publica o despublica el viaje, simula un retraso de vuelo y aprueba el aviso: todo llega al teléfono al instante. Los nombres, vuelos y hotel son inventados.</p>
+<p class="intro">Esta demo muestra cómo funciona la app. A la izquierda trabaja la asesora; a la derecha está el teléfono de la pasajera. Edita o añade segmentos, publica o despublica el viaje, cambia la hora o la puerta del vuelo y aprueba el aviso: todo llega al teléfono al instante. La vista de la dueña incluye todo lo de la asesora más el resumen del negocio. Los nombres, vuelos y hotel son inventados.</p>
 
-<div class="mob" role="group" aria-label="Pantalla"><button class="pill" id="mPanel" aria-pressed="true">Panel</button><button class="pill" id="mApp" aria-pressed="false">App de la pasajera</button></div>
+<button class="fab" id="fab">Ver app ↓</button>
 
 <div class="grid" id="grid" data-m="panel">
  <div class="panelcol stack" id="panelcol"></div>
@@ -160,7 +160,7 @@ const S={
   notices:[{id:1,title:"Itinerario publicado",body:"Mariana preparó tu viaje a la Costa Amalfitana.",ts:"Hace 2 días",unread:false}],
   queue:[],
   chat:[{from:"a",text:"Hola Isabel, soy Mariana. Aquí tendrás todo tu viaje. Escríbeme si necesitas algo.",ts:"Lun"}],
-  sentCount:0
+  sentCount:0,editing:null
 };
 const $=s=>document.querySelector(s);
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -215,16 +215,24 @@ function renderTabs(){const t=[...document.querySelectorAll("#ptab .dot")];t.for
 function pushToast(title,body){const p=$("#push");p.innerHTML=`<b>Nomad Travel · ahora</b><div style="font-weight:500">${esc(title)}</div><div style="color:#6B705D">${esc(body)}</div>`;p.classList.add("on");clearTimeout(pushToast.t);pushToast.t=setTimeout(()=>p.classList.remove("on"),4200)}
 
 /* ---------- Panel ---------- */
-function renderPanel(){
-  const el=$("#panelcol");
-  if(S.view==="owner"){el.innerHTML=ownerHTML();return}
-  const flightSeg=S.segs.some(s=>s.type==="flight");
-  el.innerHTML=`
+function segRow(s){
+  if(S.editing===s.id)return `<form class="add seg-edit" id="editForm" data-id="${s.id}" style="border-bottom:1px solid var(--line);padding-bottom:14px">
+   <label>Tipo<select id="eType">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${k===s.type?"selected":""}>${v.l}</option>`).join("")}</select></label>
+   <label>Día<select id="eDay">${DAYS.map((d,i)=>`<option value="${i}" ${i===s.day?"selected":""}>${d}</option>`).join("")}</select></label>
+   <label>Hora<input id="eTime" type="time" value="${s.time}" required></label>
+   <label class="full">Título<input id="eTitle" value="${esc(s.title)}" required></label>
+   <label class="full">Detalle<input id="eSub" value="${esc(s.sub||"")}"></label>
+   <div class="full row"><button class="btn sm" type="submit">Guardar cambios</button><button class="btn ghost sm" type="button" data-canceledit="1">Cancelar</button></div></form>`;
+  return `<div class="seg"><div class="ico">${TYPES[s.type].i}</div><div style="flex:1"><div class="t">${esc(s.title)}</div><div class="s">${DAYS[s.day]} · ${s.time} · ${TYPES[s.type].l}${s.sub?" · "+esc(s.sub):""}</div></div><button class="btn ghost sm" data-edit="${s.id}" aria-label="Editar ${esc(s.title)}">Editar</button><button class="btn danger sm" data-del="${s.id}" aria-label="Quitar ${esc(s.title)}">Quitar</button></div>`;
+}
+
+function advisorHTML(){
+  return `
   <div class="card"><div class="row"><div><div class="sec">Viaje · en edición</div><h1>Isabel Fernández</h1><div class="muted">Costa Amalfitana · 23–26 oct · Asesora: Mariana</div></div>
    <div class="sp row"><span class="muted">Visible para la pasajera</span><button class="tg" id="tgPub" aria-pressed="${S.published}" aria-label="Publicar viaje"></button></div></div></div>
 
   <div class="card"><div class="row"><div class="sec">Itinerario</div><span class="chip n sp">${S.segs.length} segmentos</span></div>
-   <div id="segs">${sorted().map(s=>`<div class="seg"><div class="ico">${TYPES[s.type].i}</div><div style="flex:1"><div class="t">${esc(s.title)}</div><div class="s">${DAYS[s.day]} · ${s.time} · ${TYPES[s.type].l}</div></div><button class="btn danger sm" data-del="${s.id}" aria-label="Quitar ${esc(s.title)}">Quitar</button></div>`).join("")||'<div class="empty">Sin segmentos. Añade el primero abajo.</div>'}</div>
+   <div id="segs">${sorted().map(segRow).join("")||'<div class="empty">Sin segmentos. Añade el primero abajo.</div>'}</div>
    <form class="add" id="addForm"><label>Tipo<select id="fType">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v.l}</option>`).join("")}</select></label>
    <label>Día<select id="fDay">${DAYS.map((d,i)=>`<option value="${i}">${d}</option>`).join("")}</select></label>
    <label>Hora<input id="fTime" type="time" value="10:00" required></label>
@@ -235,6 +243,7 @@ function renderPanel(){
   <div class="card"><div class="row"><div class="sec">Alertas de vuelo CM 247</div><span class="chip ${S.flight.status==="cancel"?"bad":S.flight.delay?"warn":"ok"} sp">${S.flight.status==="cancel"?"Cancelado":S.flight.delay?"Retraso +"+S.flight.delay+" min":"A tiempo"}</span></div>
    <p class="muted" style="margin:6px 0 12px">Simula lo que reportaría el seguimiento automático del vuelo.</p>
    <div class="row"><button class="btn ghost sm" data-sim="delay">Retraso de 2 h</button><button class="btn ghost sm" data-sim="gate">Cambio de puerta</button><button class="btn ghost sm" data-sim="cancel">Cancelación</button><button class="btn ghost sm" data-sim="reset">Restablecer</button></div>
+   <form class="add" id="flightForm"><label>Retraso (min)<input id="ffDelay" type="number" min="0" step="5" value="${S.flight.delay}"></label><label>Puerta<input id="ffGate" value="${esc(S.flight.gate)}"></label><label>Estado<select id="ffStatus"><option value="ok" ${S.flight.status==="ok"?"selected":""}>A tiempo</option><option value="delay" ${S.flight.status==="delay"?"selected":""}>Retraso</option><option value="cancel" ${S.flight.status==="cancel"?"selected":""}>Cancelado</option></select></label><div class="full"><button class="btn sm" type="submit">Aplicar cambio de vuelo</button> <span class="note">Si el modo supervisado está activo, queda en "Avisos por aprobar".</span></div></form>
    <div class="row" style="margin-top:14px"><button class="tg" id="tgSup" aria-pressed="${S.supervised}" aria-label="Modo supervisado"></button><div><b style="font-weight:500">Modo supervisado</b><div class="note">${S.supervised?"Apruebas cada aviso antes de enviarlo.":"Los avisos se envían solos."}</div></div></div></div>
 
   <div class="card"><div class="row"><div class="sec">Avisos por aprobar</div><span class="chip ${S.queue.length?"warn":"n"} sp">${S.queue.length}</span></div>
@@ -242,11 +251,11 @@ function renderPanel(){
 
   <div class="card"><div class="sec">Conversación con la pasajera</div><div style="margin:10px 0;display:flex;flex-direction:column;gap:6px;max-height:190px;overflow:auto" id="chatLog">${S.chat.map(m=>`<div class="${m.from==="a"?"wa":"wa"}" style="${m.from==="p"?"background:var(--accent-soft);color:var(--ink);border-radius:12px 12px 3px 12px;align-self:flex-end":"align-self:flex-start"}"><span class="note" style="display:block">${m.from==="a"?"Tú":"Isabel"}</span>${esc(m.text)}</div>`).join("")}</div>
    <form class="row" id="agentChat"><input id="agIn" placeholder="Responder a Isabel…" aria-label="Respuesta" style="flex:1;min-width:160px"><button class="btn sm">Enviar</button></form></div>`;
-  const cl=$("#chatLog");if(cl)cl.scrollTop=cl.scrollHeight;
 }
+function renderPanel(){const el=$("#panelcol");el.innerHTML=(S.view==="owner"?ownerHTML():"")+advisorHTML();const cl=$("#chatLog");if(cl)cl.scrollTop=cl.scrollHeight}
 function ownerHTML(){
   const m=[12,14,15,17,18,19,21,16,18],n=[22,26,30,34,36,38,40,34,34],L=["E","F","M","A","M","J","J","A","S"];const mx=40;
-  return `<div class="card"><div class="sec">Vista de la dueña</div><h1>Resumen del negocio</h1><div class="muted">Enero a septiembre 2026</div></div>
+  return `<div class="card"><div class="sec">Vista de la dueña</div><h1>Resumen del negocio</h1><div class="muted">Enero a septiembre 2026 · Como dueña también puedes hacer todo lo que hace una asesora: está justo debajo.</div></div>
   <div class="kpis"><div class="card kpi"><div class="sec">Pasajeros</div><div class="v">294</div><div class="muted">+96% vs. 150 del año pasado</div></div>
   <div class="card kpi"><div class="sec">Viajes en esta demo</div><div class="v">${S.published?1:0}</div><div class="muted">${S.segs.length} segmentos cargados</div></div>
   <div class="card kpi"><div class="sec">Avisos enviados (demo)</div><div class="v">${S.sentCount}</div><div class="muted">${S.queue.length} por aprobar</div></div></div>
@@ -257,6 +266,20 @@ function render(){renderPanel();renderPhone();
   $("#vAgent").setAttribute("aria-pressed",S.view==="agent");$("#vOwner").setAttribute("aria-pressed",S.view==="owner")}
 
 /* ---------- Acciones ---------- */
+function applyFlightForm(){
+  const d=Math.max(0,parseInt($("#ffDelay").value,10)||0),g=($("#ffGate").value.trim()||S.flight.gate),st=$("#ffStatus").value;
+  let status=st==="cancel"?"cancel":(d>0||st==="delay"&&d>0?"delay":"ok");
+  if(status==="delay"&&d===0)status="ok";
+  const same=d===S.flight.delay&&g===S.flight.gate&&status===S.flight.status;if(same)return;
+  let title,msg;
+  if(status==="cancel"){title="Vuelo cancelado";msg="Isabel, lamentamos avisarte que el vuelo CM 247 fue cancelado. Mariana te llamará en unos minutos con alternativas."}
+  else if(status==="delay"){title="Retraso de vuelo";msg=`Hola Isabel, tu vuelo CM 247 tiene un retraso de ${d} min. Nueva salida: ${fmt(370+d)}. Mariana está al tanto.`}
+  else if(g!==S.flight.gate){title="Cambio de puerta";msg=`Isabel, tu vuelo CM 247 saldrá ahora por la puerta ${g}.`}
+  else{title="Vuelo a tiempo";msg="Isabel, tu vuelo CM 247 vuelve a salir a su hora original."}
+  if(status!=="delay"&&g!==S.flight.gate&&title!=="Cambio de puerta")msg+=` Puerta ${g}.`;
+  const item={id:uid++,kind:status,title,msg,apply:()=>{S.flight.delay=status==="delay"?d:0;S.flight.gate=g;S.flight.status=status}};
+  if(S.supervised){S.queue.push(item);render()}else{item.apply();addNotice(title,msg);render()}
+}
 function addNotice(title,body){S.notices.unshift({id:uid++,title,body,ts:"Ahora",unread:S.tab!=="av"});S.sentCount++;pushToast(title,body)}
 function simulate(kind){
   if(kind==="reset"){S.flight={delay:0,gate:"B7",status:"ok"};S.queue=[];render();return}
@@ -270,7 +293,9 @@ document.addEventListener("click",e=>{
   const t=e.target.closest("button");if(!t)return;
   if(t.id==="vAgent"){S.view="agent";render()}
   else if(t.id==="vOwner"){S.view="owner";render()}
-  else if(t.id==="mPanel"||t.id==="mApp"){const g=$("#grid");g.dataset.m=t.id==="mPanel"?"panel":"app";$("#mPanel").setAttribute("aria-pressed",t.id==="mPanel");$("#mApp").setAttribute("aria-pressed",t.id==="mApp")}
+  else if(t.id==="fab"){const toApp=t.textContent.includes("app");if(toApp){document.querySelector(".phonecol").scrollIntoView({behavior:"smooth",block:"start"});t.textContent="Ver panel ↑"}else{window.scrollTo({top:0,behavior:"smooth"});t.textContent="Ver app ↓"}}
+  else if(t.dataset.edit){S.editing=+t.dataset.edit;render()}
+  else if(t.dataset.canceledit){S.editing=null;render()}
   else if(t.id==="tgPub"){S.published=!S.published;render()}
   else if(t.id==="tgSup"){S.supervised=!S.supervised;render()}
   else if(t.dataset.del){S.segs=S.segs.filter(s=>s.id!=t.dataset.del);render()}
@@ -284,6 +309,9 @@ document.addEventListener("submit",e=>{
   e.preventDefault();
   if(e.target.id==="addForm"){const title=$("#fTitle").value.trim();if(!title)return;S.segs.push({id:uid++,type:$("#fType").value,title,sub:$("#fSub").value.trim(),day:+$("#fDay").value,time:$("#fTime").value||"10:00"});
     S.notices.unshift({id:uid++,title:"Itinerario actualizado",body:"Se añadió: "+title,ts:"Ahora",unread:S.tab!=="av"});pushToast("Itinerario actualizado","Se añadió: "+title);render()}
+  else if(e.target.id==="editForm"){const id=+e.target.dataset.id;const s=S.segs.find(x=>x.id===id);if(!s)return;s.type=$("#eType").value;s.day=+$("#eDay").value;s.time=$("#eTime").value||s.time;s.title=$("#eTitle").value.trim()||s.title;s.sub=$("#eSub").value.trim();S.editing=null;
+    S.notices.unshift({id:uid++,title:"Itinerario actualizado",body:"Se modificó: "+s.title,ts:"Ahora",unread:S.tab!=="av"});pushToast("Itinerario actualizado","Se modificó: "+s.title);render()}
+  else if(e.target.id==="flightForm"){applyFlightForm()}
   else if(e.target.id==="agentChat"){const v=$("#agIn").value.trim();if(!v)return;S.chat.push({from:"a",text:v,ts:"Ahora"});pushToast("Mariana",v);render()}
   else if(e.target.id==="chatForm"){const v=$("#chatIn").value.trim();if(!v)return;S.chat.push({from:"p",text:v,ts:"Ahora"});renderPhone();renderPanel()}
 });
